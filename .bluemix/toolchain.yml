@@ -23,7 +23,7 @@ toolchain:
       $ref: "#/messages/template.gettingStarted" 
 services:
   metrics-transformation-repo:
-    service_id: hostedgit
+    service_id: github_integrated
     parameters:
       repo_name: 'metrics-transformation-{{timestamp}}'
       repo_url: 'https://github.ibm.com/SLayer/Metrics-Transformation-Service'
