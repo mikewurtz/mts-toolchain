@@ -13,9 +13,9 @@ template:
     - metrics-transformation-repo
   info:
     git url: >-
-      [https://github.ibm.com/SLayer/Metrics-Transformation-Service](https://github.ibm.com/SLayer/Metrics-Transformation-Service)
+      [https://github.ibm.com/SLayer/Metrics-Transformation-Service](https://github.com/mikewurtz/mts-toolchain)
     git branch: >-
-      [master](https://github.ibm.com/SLayer/Metrics-Transformation-Service/tree/master)
+      [master](https://github.com/mikewurtz/mts-toolchain/tree/master)
 toolchain:
   name: 'metrics-transformation-toolchain-{{timestamp}}'
   template:
@@ -27,7 +27,7 @@ services:
     parameters:
       repo_name: 'metrics-transformation-{{timestamp}}'
       repo_url: 'https://github.ibm.com/SLayer/Metrics-Transformation-Service'
-      type: existing
+      type: Existing
       has_issues: true
       enable_traceability: true
   metrics-transformation-build:
