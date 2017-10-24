@@ -17,7 +17,7 @@ template:
     git branch: >-
       [master](https://github.com/open-toolchain/secure-kube-toolchain/tree/master)
 toolchain:
-  name: 'secure-kubernetes-toolchain-{{timestamp}}'
+  name: 'metrics-transformation-toolchain-{{timestamp}}'
   template:
     getting_started:
       $ref: "#/messages/template.gettingStarted" 
@@ -51,8 +51,6 @@ services:
           PROD_CLUSTER_NAME: '{{form.pipeline.parameters.prod-cluster-name}}'
           API_KEY: '{{form.pipeline.parameters.api-key}}'
         execute: true
-  webide:
-    service_id: orion
 form:
   pipeline:
     parameters:
