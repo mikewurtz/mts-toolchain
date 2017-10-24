@@ -27,7 +27,7 @@ services:
     parameters:
       repo_name: 'metrics-transformation-{{timestamp}}'
       repo_url: 'https://github.ibm.com/SLayer/Metrics-Transformation-Service'
-      type: link
+      type: existing
       has_issues: true
       enable_traceability: true
   metrics-transformation-build:
