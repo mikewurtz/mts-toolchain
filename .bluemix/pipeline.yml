@@ -91,7 +91,8 @@ stages:
           echo -e "${red}Kubernetes deployment file 'deployment.yml' not found at the repository root${no_color}"
           exit 1
       fi
-- name: DEPLOY TO PROD
+
+- name: DEPLOY TO QA
   inputs:
   - type: job
     stage: BUILD
@@ -119,18 +120,18 @@ stages:
       echo ""
       echo "DEPLOYING USING MANIFEST:"
       cat deployment.yml
-      kubectl apply -f deployment.yml  
+      kubectl apply -f deployment.yml --namespace=mts-qa
       echo ""
       echo "DEPLOYED SERVICE:"
-      kubectl describe services metrics-transformation-service
+      kubectl describe services metrics-transformation-service --namespace=mts-qa
       echo ""
       echo "DEPLOYED PODS:"
-      kubectl describe pods --selector app=metrics-transformation
-      port=$(kubectl get services | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-qa
+      port=$(kubectl get services --namespace=mts-qa | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
       echo ""
       echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
 
-- name: DEPLOY
+- name: DEPLOY TO STAGE
   inputs:
   - type: job
     stage: BUILD
@@ -160,13 +161,54 @@ stages:
       echo ""
       echo "DEPLOYING USING MANIFEST:"
       cat deployment.yml
-      kubectl apply -f deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-stg
       echo ""
       echo "DEPLOYED SERVICE:"
-      kubectl describe services metrics-transformation-service
+      kubectl describe services metrics-transformation-service --namespace=mts-stg
       echo ""
       echo "DEPLOYED PODS:"
-      kubectl describe pods --selector app=metrics-transformation
-      port=$(kubectl get services | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-stg
+      port=$(kubectl get services --namespace=mts-stg | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+
+- name: DEPLOY TO PROD
+  inputs:
+  - type: job
+    stage: BUILD
+    job: Build image
+  # At the time of creating this there is no trigger for a manual push
+  # so you will have to go through the ui to make the push to prod manual and gated
+  jobs:
+  - name: Deploy Kubernetes Pod
+    type: deployer
+    target:
+      region_id: ${PROD_REGION_ID}
+      organization: ${PROD_ORG_NAME}
+      space: ${PROD_SPACE_NAME}
+      api_key: ${API_KEY}
+      kubernetes_cluster: ${PROD_CLUSTER_NAME}
+    script: |
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts
+      port=$(kubectl get services --namespace=mts | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
       echo ""
       echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
