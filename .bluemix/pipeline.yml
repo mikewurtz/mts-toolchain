@@ -4,7 +4,7 @@ stages:
   inputs:
   - type: git
     branch: master
-    service: ${GIT_REPO}    
+    service: ${GIT_REPO}
   triggers:
   - type: commit
   jobs:
@@ -90,28 +90,8 @@ stages:
       else 
           echo -e "${red}Kubernetes deployment file 'deployment.yml' not found at the repository root${no_color}"
           exit 1
-      fi      
-- name: VALIDATE
-  inputs:
-  - type: job
-    stage: BUILD
-    job: Build image
-  triggers:
-  - type: stage
-  properties:
-  - name: FULL_REPOSITORY_NAME
-    value: ''
-    type: text  
-  jobs:
-  - name: Vulnerability Advisor
-    type: tester
-    extension_id: ibm.devops.services.pipeline.crawler.tester
-    target:
-      region_id: ${PROD_REGION_ID}
-      organization: ${PROD_ORG_NAME}
-      space: ${PROD_SPACE_NAME}
-    WAIT_TIME: '5'
-- name: DEPLOY
+      fi
+- name: DEPLOY TO PROD
   inputs:
   - type: job
     stage: BUILD
@@ -140,6 +120,47 @@ stages:
       echo "DEPLOYING USING MANIFEST:"
       cat deployment.yml
       kubectl apply -f deployment.yml  
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation
+      port=$(kubectl get services | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+
+- name: DEPLOY
+  inputs:
+  - type: job
+    stage: BUILD
+    job: Build image
+  triggers:
+  - type: manual
+  jobs:
+  - name: Deploy Kubernetes Pod
+    type: deployer
+    target:
+      region_id: ${PROD_REGION_ID}
+      organization: ${PROD_ORG_NAME}
+      space: ${PROD_SPACE_NAME}
+      api_key: ${API_KEY}
+      kubernetes_cluster: ${PROD_CLUSTER_NAME}
+    script: |
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml
       echo ""
       echo "DEPLOYED SERVICE:"
       kubectl describe services metrics-transformation-service
