@@ -136,8 +136,6 @@ stages:
   - type: job
     stage: BUILD
     job: Build image
-  triggers:
-  - type: manual
   jobs:
   - name: Deploy Kubernetes Pod
     type: deployer
