@@ -12,7 +12,7 @@ The Metrics Transformation application provides cloud services using Docker cont
 1. A Kubernetes cluster. Use the [Bluemix Containers](https://console.bluemix.net/containers-kubernetes/home/clusters) UI to view your existing clusters. If necessary, click `Create Cluster` and follow prompts to create a new Kubernets cluster.
 
 ### To get started, click this button:
-[![Deploy To Bluemix](https://console.bluemix.net/devops/graphics/create_toolchain_button.png)](https://console.bluemix.net/devops/setup/deploy/?repository=https%3A//github.com/rodrabe/metric-transformation-toolchain)
+[![Deploy To Bluemix](https://console.bluemix.net/devops/graphics/create_toolchain_button.png)](https://console.bluemix.net/devops/setup/deploy/?repository=https%3A//github.com/mikewurtz/metric-transformation-toolchain)
 
 ### Add Slack messaging (optional):
 By default, the `Metrics-Tranformation-Service` toolchain does not come pre-configured with Slack message integration. Perform the following steps to add the Slack tool after creating the toolchain, to enable automated notifications sent to a Slack channel of your choosing.
