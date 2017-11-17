@@ -117,6 +117,10 @@ stages:
       fi
       #Connect to a different container-service api by uncommenting and specifying an api endpoint
       #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/qa/' deployment.yml
+      sed -i 's/region_placeholder/qa/' deployment.yml
+      sed -i 's/data_center_placeholder/qa/' deployment.yml
       echo ""
       echo "DEPLOYING USING MANIFEST:"
       cat deployment.yml
@@ -156,6 +160,10 @@ stages:
       fi
       #Connect to a different container-service api by uncommenting and specifying an api endpoint
       #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/stg/' deployment.yml
+      sed -i 's/region_placeholder/stg/' deployment.yml
+      sed -i 's/data_center_placeholder/stg/' deployment.yml
       echo ""
       echo "DEPLOYING USING MANIFEST:"
       cat deployment.yml
@@ -197,6 +205,10 @@ stages:
       fi
       #Connect to a different container-service api by uncommenting and specifying an api endpoint
       #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/prod/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/mex01/' deployment.yml
       echo ""
       echo "DEPLOYING USING MANIFEST:"
       cat deployment.yml
