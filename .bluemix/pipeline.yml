@@ -134,6 +134,49 @@ stages:
       port=$(kubectl get services --namespace=mts-qa | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
       echo ""
       echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+      
+- name: DEPLOY TO Stage Baremetal
+  inputs:
+  - type: job
+    stage: BUILD
+    job: Build image
+  jobs:
+  - name: Deploy Kubernetes Pod
+    type: deployer
+    target:
+      region_id: ${PROD_REGION_ID}
+      organization: ${PROD_ORG_NAME}
+      space: ${PROD_SPACE_NAME}
+      api_key: ${API_KEY}
+      kubernetes_cluster: ${PROD_CLUSTER_NAME}
+    script: |
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/bm-stage/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/mex01/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-qa
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-qa
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-qa
+      port=$(kubectl get services --namespace=mts-qa | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
 
 
 - name: DEPLOY TO STAGE
@@ -168,14 +211,14 @@ stages:
       echo ""
       echo "DEPLOYING USING MANIFEST:"
       cat deployment.yml
-      kubectl apply -f deployment.yml --namespace=mts-stg
+      kubectl apply -f deployment.yml --namespace=mts-stg-bm-mex01
       echo ""
       echo "DEPLOYED SERVICE:"
-      kubectl describe services metrics-transformation-service --namespace=mts-stg
+      kubectl describe services metrics-transformation-service --namespace=mts-stg-bm-mex01
       echo ""
       echo "DEPLOYED PODS:"
-      kubectl describe pods --selector app=metrics-transformation --namespace=mts-stg
-      port=$(kubectl get services --namespace=mts-stg | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-stg-bm-mex01
+      port=$(kubectl get services --namespace=mts-stg-bm-mex01 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
       echo ""
       echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
 
