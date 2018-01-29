@@ -2,10 +2,9 @@
 stages:
 - name: BUILD
   inputs:
-  - url: https://github.ibm.com/SLayer/Metrics-Transformation-Service.git
-    type: git
+  - type: git
     branch: master
-    dir_name: null
+    service: ${GIT_REPO}
   triggers:
   - type: commit
   jobs:
