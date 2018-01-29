@@ -2,110 +2,72 @@
 stages:
 - name: BUILD
   inputs:
-  - type: git
+  - url: https://github.ibm.com/SLayer/Metrics-Transformation-Service.git
+    type: git
     branch: master
-    service: ${GIT_REPO}
+    dir_name: null
   triggers:
   - type: commit
   jobs:
   - name: Build image
     type: builder
-    build_type: cr
     artifact_dir: output
+    build_type: cr
+    script: "#!/bin/bash\n#set -x\n\necho -e \"Build environment variables:\"\necho\
+      \ \"REGISTRY_URL=${REGISTRY_URL}\"\necho \"REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE}\"\
+      \necho \"IMAGE_NAME=${IMAGE_NAME}\"\necho \"BUILD_NUMBER=${BUILD_NUMBER}\"\n\
+      echo \"ARCHIVE_DIR=${ARCHIVE_DIR}\"\n\n# Learn more about the available environment\
+      \ variables at:\n# https://console.bluemix.net/docs/services/ContinuousDelivery/pipeline_deploy_var.html#deliverypipeline_environment\n\
+      \n# To review or change build options use:\n# bx cr build --help\n\necho \"\
+      ==========================================================\"\necho \"Checking\
+      \ for Dockerfile at the repository root\"\nif [ -f Dockerfile ]; then \n  echo\
+      \ \"Dockerfile found\"\nelse\n    echo \"Dockerfile not found\"\n    exit 1\n\
+      fi\n\necho \"==========================================================\"\n\
+      echo \"Checking registry current plan and quota\"\nbx cr plan\nbx cr quota\n\
+      echo \"If needed, discard older images using: bx cr image-rm\"\n\necho \"Checking\
+      \ registry namespace: ${REGISTRY_NAMESPACE}\"\nNS=$( bx cr namespaces | grep\
+      \ ${REGISTRY_NAMESPACE} ||: )\nif [ -z ${NS} ]; then\n    echo \"Registry namespace\
+      \ ${REGISTRY_NAMESPACE} not found, creating it.\"\n    bx cr namespace-add ${REGISTRY_NAMESPACE}\n\
+      \    echo \"Registry namespace ${REGISTRY_NAMESPACE} created.\"\nelse \n   \
+      \ echo \"Registry namespace ${REGISTRY_NAMESPACE} found.\"\nfi\n\necho -e \"\
+      Existing images in registry\"\nbx cr images\n\necho \"==========================================================\"\
+      \necho -e \"Building container image: ${IMAGE_NAME}:${BUILD_NUMBER}\"\nIMAGE_LOCATION=${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}\n\
+      set -x\nbx cr build -t ${IMAGE_LOCATION}:${BUILD_NUMBER} .\nset +x\nbx cr image-inspect\
+      \ ${IMAGE_LOCATION}:${BUILD_NUMBER}\n\n######################################################################################\n\
+      # Copy any artifacts that will be needed for deployment and testing to $WORKSPACE\
+      \    #\n######################################################################################\n\
+      echo -e \"Checking archive dir presence\"\nmkdir -p $ARCHIVE_DIR\n\n# IMAGE_NAME\
+      \ from build.properties is used by Vulnerability Advisor job to reference the\
+      \ image qualified location in registry\necho \"IMAGE_NAME=${IMAGE_LOCATION}:${BUILD_NUMBER}\"\
+      \ >> $ARCHIVE_DIR/build.properties\n\n#Update deployment.yml with image name\n\
+      if [ -f deployment.yml ]; then\n    echo \"UPDATING DEPLOYMENT MANIFEST:\"\n\
+      \    sed -i \"s~^\\([[:blank:]]*\\)image:.*$~\\1image: ${IMAGE_LOCATION}:${BUILD_NUMBER}~\"\
+      \ deployment.yml\n    cat deployment.yml\n    if [ ! -f $ARCHIVE_DIR/deployment.yml\
+      \ ]; then # no need to copy if working in ./ already    \n        cp deployment.yml\
+      \ $ARCHIVE_DIR/\n    fi\nelse \n    echo -e \"${red}Kubernetes deployment file\
+      \ 'deployment.yml' not found at the repository root${no_color}\"\n    exit 1\n\
+      fi\n"
+    namespace: metrics_transformation_service
+    image_name: metrics-transformation-service
     target:
-      region_id: ${REGISTRY_REGION_ID}
-      api_key: ${API_KEY}
-    namespace: ${REGISTRY_NAMESPACE}
-    image_name: ${CF_APP_NAME}
-    script: |
-      #!/bin/bash
-      #set -x
-
-      echo -e "Build environment variables:"
-      echo "REGISTRY_URL=${REGISTRY_URL}"
-      echo "REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE}"
-      echo "IMAGE_NAME=${IMAGE_NAME}"
-      echo "BUILD_NUMBER=${BUILD_NUMBER}"
-      echo "ARCHIVE_DIR=${ARCHIVE_DIR}"
-
-      # Learn more about the available environment variables at:
-      # https://console.bluemix.net/docs/services/ContinuousDelivery/pipeline_deploy_var.html#deliverypipeline_environment
-
-      # To review or change build options use:
-      # bx cr build --help
-
-      echo "=========================================================="
-      echo "Checking for Dockerfile at the repository root"
-      if [ -f Dockerfile ]; then 
-        echo "Dockerfile found"
-      else
-          echo "Dockerfile not found"
-          exit 1
-      fi
-
-      echo "=========================================================="
-      echo "Checking registry current plan and quota"
-      bx cr plan
-      bx cr quota
-      echo "If needed, discard older images using: bx cr image-rm"
-
-      echo "Checking registry namespace: ${REGISTRY_NAMESPACE}"
-      NS=$( bx cr namespaces | grep ${REGISTRY_NAMESPACE} ||: )
-      if [ -z ${NS} ]; then
-          echo "Registry namespace ${REGISTRY_NAMESPACE} not found, creating it."
-          bx cr namespace-add ${REGISTRY_NAMESPACE}
-          echo "Registry namespace ${REGISTRY_NAMESPACE} created."
-      else 
-          echo "Registry namespace ${REGISTRY_NAMESPACE} found."
-      fi
-
-      echo -e "Existing images in registry"
-      bx cr images
-
-      echo "=========================================================="
-      echo -e "Building container image: ${IMAGE_NAME}:${BUILD_NUMBER}"
-      IMAGE_LOCATION=${REGISTRY_URL}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}
-      set -x
-      bx cr build -t ${IMAGE_LOCATION}:${BUILD_NUMBER} .
-      set +x
-      bx cr image-inspect ${IMAGE_LOCATION}:${BUILD_NUMBER}
-
-      ######################################################################################
-      # Copy any artifacts that will be needed for deployment and testing to $WORKSPACE    #
-      ######################################################################################
-      echo -e "Checking archive dir presence"
-      mkdir -p $ARCHIVE_DIR
-
-      # IMAGE_NAME from build.properties is used by Vulnerability Advisor job to reference the image qualified location in registry
-      echo "IMAGE_NAME=${IMAGE_LOCATION}:${BUILD_NUMBER}" >> $ARCHIVE_DIR/build.properties
-
-      #Update deployment.yml with image name
-      if [ -f deployment.yml ]; then
-          echo "UPDATING DEPLOYMENT MANIFEST:"
-          sed -i "s~^\([[:blank:]]*\)image:.*$~\1image: ${IMAGE_LOCATION}:${BUILD_NUMBER}~" deployment.yml
-          cat deployment.yml
-          if [ ! -f $ARCHIVE_DIR/deployment.yml ]; then # no need to copy if working in ./ already    
-              cp deployment.yml $ARCHIVE_DIR/
-          fi
-      else 
-          echo -e "${red}Kubernetes deployment file 'deployment.yml' not found at the repository root${no_color}"
-          exit 1
-      fi
-
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
 - name: DEPLOY TO QA
   inputs:
   - type: job
     stage: BUILD
     job: Build image
+    dir_name: null
+  triggers:
+  - type: stage
   jobs:
   - name: Deploy Kubernetes Pod
     type: deployer
+    deploy_permission: DEV_IN_SPACE
     target:
-      region_id: ${PROD_REGION_ID}
-      organization: ${PROD_ORG_NAME}
-      space: ${PROD_SPACE_NAME}
-      api_key: ${API_KEY}
-      kubernetes_cluster: ${PROD_CLUSTER_NAME}
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
     script: |
       #!/bin/bash
       #set -x
@@ -134,65 +96,20 @@ stages:
       port=$(kubectl get services --namespace=mts-qa | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
       echo ""
       echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
-      
-- name: DEPLOY TO Stage Baremetal
-  inputs:
-  - type: job
-    stage: BUILD
-    job: Build image
-  jobs:
-  - name: Deploy Kubernetes Pod
-    type: deployer
-    target:
-      region_id: ${PROD_REGION_ID}
-      organization: ${PROD_ORG_NAME}
-      space: ${PROD_SPACE_NAME}
-      api_key: ${API_KEY}
-      kubernetes_cluster: ${PROD_CLUSTER_NAME}
-    script: |
-      #!/bin/bash
-      #set -x
-      #Check cluster availability
-      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
-      if [ -z $ip_addr ]; then
-        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
-        exit 1
-      fi
-      #Connect to a different container-service api by uncommenting and specifying an api endpoint
-      #bx cs init --host https://us-south.containers.bluemix.net
-      echo "INJECTING ENV VARS"
-      sed -i 's/env_placeholder/bm-stage/' deployment.yml
-      sed -i 's/region_placeholder/us-south/' deployment.yml
-      sed -i 's/data_center_placeholder/mex01/' deployment.yml
-      echo ""
-      echo "DEPLOYING USING MANIFEST:"
-      cat deployment.yml
-      kubectl apply -f deployment.yml --namespace=mts-qa
-      echo ""
-      echo "DEPLOYED SERVICE:"
-      kubectl describe services metrics-transformation-service --namespace=mts-qa
-      echo ""
-      echo "DEPLOYED PODS:"
-      kubectl describe pods --selector app=metrics-transformation --namespace=mts-qa
-      port=$(kubectl get services --namespace=mts-qa | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
-      echo ""
-      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
-
-
 - name: DEPLOY TO STAGE
   inputs:
   - type: job
     stage: BUILD
     job: Build image
+    dir_name: null
   jobs:
-  - name: Deploy Kubernetes Pod
+  - name: VSI
     type: deployer
+    deploy_permission: DEV_IN_SPACE
     target:
-      region_id: ${PROD_REGION_ID}
-      organization: ${PROD_ORG_NAME}
-      space: ${PROD_SPACE_NAME}
-      api_key: ${API_KEY}
-      kubernetes_cluster: ${PROD_CLUSTER_NAME}
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
     script: |
       #!/bin/bash
       #set -x
@@ -211,6 +128,41 @@ stages:
       echo ""
       echo "DEPLOYING USING MANIFEST:"
       cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-stg
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-stg
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-stg
+      port=$(kubectl get services --namespace=mts-stg | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: Baremetal
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/stg-bm/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/mex01/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
       kubectl apply -f deployment.yml --namespace=mts-stg-bm-mex01
       echo ""
       echo "DEPLOYED SERVICE:"
@@ -221,25 +173,21 @@ stages:
       port=$(kubectl get services --namespace=mts-stg-bm-mex01 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
       echo ""
       echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
-
-
-- name: DEPLOY TO VSI MEX01
+- name: DEPLOY TO VSI US South
   inputs:
   - type: job
     stage: BUILD
     job: Build image
-  # At the time of creating this there is no trigger for a manual push
-  # so you will have to go through the ui to make the push to prod manual and gated
+    dir_name: null
   jobs:
-  - name: Deploy Kubernetes Pod
+  - name: MEX01
     type: deployer
+    deploy_permission: DEV_IN_SPACE
     target:
-      region_id: ${PROD_REGION_ID}
-      organization: ${PROD_ORG_NAME}
-      space: ${PROD_SPACE_NAME}
-      api_key: ${API_KEY}
-      kubernetes_cluster: ${PROD_CLUSTER_NAME}
-    script: |
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
       #!/bin/bash
       #set -x
       #Check cluster availability
@@ -267,3 +215,447 @@ stages:
       port=$(kubectl get services --namespace=mts | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
       echo ""
       echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: DAL01
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/dal01/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal01
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal01
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal01
+      port=$(kubectl get services --namespace=mts-vsi-dal01 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: DAL05
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/dal05/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal05
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal05
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal05
+      port=$(kubectl get services --namespace=mts-vsi-dal05 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: DAL06
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/dal06/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal06
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal06
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal06
+      port=$(kubectl get services --namespace=mts-vsi-dal06 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: DAL09
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/dal09/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal09
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal09
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal09
+      port=$(kubectl get services --namespace=mts-vsi-dal09 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: DAL10
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/dal10/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal10
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal10
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal10
+      port=$(kubectl get services --namespace=mts-vsi-dal10 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: DAL12
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/dal12/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal12
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal12
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal12
+      port=$(kubectl get services --namespace=mts-vsi-dal12 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: DAL13
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/dal13/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal13
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal13
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal13
+      port=$(kubectl get services --namespace=mts-vsi-dal13 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+- name: DEPLOY TO VSI US East
+  inputs:
+  - type: job
+    stage: BUILD
+    job: Build image
+    dir_name: null
+  jobs:
+  - name: WDC07
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: "#!/bin/bash\n#set -x\n#Check cluster availability\nset -x\nbx plugin\
+      \ update container-service \nbx login -apikey ymQYuqGrARF8_OH708UG39a3P0E2a3nZJdYX8aBE5k9-\
+      \ -a api.us-east.bluemix.net\nbx cs region-set us-east\nPIPELINE_KUBERNETES_CLUSTER_NAME=mts-wdc07\n\
+      eval $(bx cs cluster-config --export ${PIPELINE_KUBERNETES_CLUSTER_NAME})\n\
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk\
+      \ '{ print $2 }')\nif [ -z $ip_addr ]; then\n  echo \"$PIPELINE_KUBERNETES_CLUSTER_NAME\
+      \ not created or workers not ready\"\n  exit 1\nfi\n#Connect to a different\
+      \ container-service api by uncommenting and specifying an api endpoint\n#bx\
+      \ cs init --host https://us-south.containers.bluemix.net\necho \"INJECTING ENV\
+      \ VARS\"\nsed -i 's/env_placeholder/vsi/' deployment.yml\nsed -i 's/region_placeholder/us-south/'\
+      \ deployment.yml\nsed -i 's/data_center_placeholder/wdc07/' deployment.yml\n\
+      echo \"\"\necho \"DEPLOYING USING MANIFEST:\"\ncat deployment.yml\nkubectl apply\
+      \ -f deployment.yml --namespace=mts-vsi-wdc07\necho \"\"\necho \"DEPLOYED SERVICE:\"\
+      \nkubectl describe services metrics-transformation-service --namespace=mts-vsi-wdc07\n\
+      echo \"\"\necho \"DEPLOYED PODS:\"\nkubectl describe pods --selector app=metrics-transformation\
+      \ --namespace=mts-vsi-wdc07\nport=$(kubectl get services --namespace=mts-vsi-wdc07\
+      \ | grep metrics-transformation-service | sed 's/.*:\\([0-9]*\\).*/\\1/g')\n\
+      echo \"\"\necho \"VIEW THE APPLICATION AT: http://$ip_addr:$port\""
+  - name: WDC04
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: "#!/bin/bash\n#set -x\n#Check cluster availability\nset -x\nbx plugin\
+      \ update container-service \nbx login -apikey ymQYuqGrARF8_OH708UG39a3P0E2a3nZJdYX8aBE5k9-\
+      \ -a api.us-east.bluemix.net\nbx cs region-set us-east\nPIPELINE_KUBERNETES_CLUSTER_NAME=mts-wdc07\n\
+      eval $(bx cs cluster-config --export ${PIPELINE_KUBERNETES_CLUSTER_NAME})\n\
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk\
+      \ '{ print $2 }')\nif [ -z $ip_addr ]; then\n  echo \"$PIPELINE_KUBERNETES_CLUSTER_NAME\
+      \ not created or workers not ready\"\n  exit 1\nfi\n#Connect to a different\
+      \ container-service api by uncommenting and specifying an api endpoint\n#bx\
+      \ cs init --host https://us-south.containers.bluemix.net\necho \"INJECTING ENV\
+      \ VARS\"\nsed -i 's/env_placeholder/vsi/' deployment.yml\nsed -i 's/region_placeholder/us-south/'\
+      \ deployment.yml\nsed -i 's/data_center_placeholder/wdc04/' deployment.yml\n\
+      echo \"\"\necho \"DEPLOYING USING MANIFEST:\"\ncat deployment.yml\nkubectl apply\
+      \ -f deployment.yml --namespace=mts-vsi-wdc04\necho \"\"\necho \"DEPLOYED SERVICE:\"\
+      \nkubectl describe services metrics-transformation-service --namespace=mts-vsi-wdc04\n\
+      echo \"\"\necho \"DEPLOYED PODS:\"\nkubectl describe pods --selector app=metrics-transformation\
+      \ --namespace=mts-vsi-wdc04\nport=$(kubectl get services --namespace=mts-vsi-wdc04\
+      \ | grep metrics-transformation-service | sed 's/.*:\\([0-9]*\\).*/\\1/g')\n\
+      echo \"\"\necho \"VIEW THE APPLICATION AT: http://$ip_addr:$port\""
+  - name: WDC06
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: "#!/bin/bash\n#set -x\n#Check cluster availability\nset -x\nbx plugin\
+      \ update container-service \nbx login -apikey ymQYuqGrARF8_OH708UG39a3P0E2a3nZJdYX8aBE5k9-\
+      \ -a api.us-east.bluemix.net\nbx cs region-set us-east\nPIPELINE_KUBERNETES_CLUSTER_NAME=mts-wdc07\n\
+      eval $(bx cs cluster-config --export ${PIPELINE_KUBERNETES_CLUSTER_NAME})\n\
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk\
+      \ '{ print $2 }')\nif [ -z $ip_addr ]; then\n  echo \"$PIPELINE_KUBERNETES_CLUSTER_NAME\
+      \ not created or workers not ready\"\n  exit 1\nfi\n#Connect to a different\
+      \ container-service api by uncommenting and specifying an api endpoint\n#bx\
+      \ cs init --host https://us-south.containers.bluemix.net\necho \"INJECTING ENV\
+      \ VARS\"\nsed -i 's/env_placeholder/vsi/' deployment.yml\nsed -i 's/region_placeholder/us-south/'\
+      \ deployment.yml\nsed -i 's/data_center_placeholder/wdc06/' deployment.yml\n\
+      echo \"\"\necho \"DEPLOYING USING MANIFEST:\"\ncat deployment.yml\nkubectl apply\
+      \ -f deployment.yml --namespace=mts-vsi-wdc06\necho \"\"\necho \"DEPLOYED SERVICE:\"\
+      \nkubectl describe services metrics-transformation-service --namespace=mts-vsi-wdc06\n\
+      echo \"\"\necho \"DEPLOYED PODS:\"\nkubectl describe pods --selector app=metrics-transformation\
+      \ --namespace=mts-vsi-wdc06\nport=$(kubectl get services --namespace=mts-vsi-wdc06\
+      \ | grep metrics-transformation-service | sed 's/.*:\\([0-9]*\\).*/\\1/g')\n\
+      echo \"\"\necho \"VIEW THE APPLICATION AT: http://$ip_addr:$port\""
+- name: DEPLOY TO VSI US West
+  inputs:
+  - type: job
+    stage: BUILD
+    job: Build image
+    dir_name: null
+  jobs:
+  - name: SJC01
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/sjc01/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts
+      port=$(kubectl get services --namespace=mts | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: SJC03
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/sjc03/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal01
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal01
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal01
+      port=$(kubectl get services --namespace=mts-vsi-dal01 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+  - name: SJC04
+    type: deployer
+    deploy_permission: DEV_IN_SPACE
+    target:
+      region_id: ibm:yp:us-south
+      api_key_id: ApiKey-cf84fa80-0220-44ea-aab7-2c1cfe521b16
+      kubernetes_cluster: metrics-transformation-service
+    script: |-
+      #!/bin/bash
+      #set -x
+      #Check cluster availability
+      ip_addr=$(bx cs workers $PIPELINE_KUBERNETES_CLUSTER_NAME | grep normal | awk '{ print $2 }')
+      if [ -z $ip_addr ]; then
+        echo "$PIPELINE_KUBERNETES_CLUSTER_NAME not created or workers not ready"
+        exit 1
+      fi
+      #Connect to a different container-service api by uncommenting and specifying an api endpoint
+      #bx cs init --host https://us-south.containers.bluemix.net
+      echo "INJECTING ENV VARS"
+      sed -i 's/env_placeholder/vsi/' deployment.yml
+      sed -i 's/region_placeholder/us-south/' deployment.yml
+      sed -i 's/data_center_placeholder/sjc04/' deployment.yml
+      echo ""
+      echo "DEPLOYING USING MANIFEST:"
+      cat deployment.yml
+      kubectl apply -f deployment.yml --namespace=mts-vsi-dal05
+      echo ""
+      echo "DEPLOYED SERVICE:"
+      kubectl describe services metrics-transformation-service --namespace=mts-vsi-dal05
+      echo ""
+      echo "DEPLOYED PODS:"
+      kubectl describe pods --selector app=metrics-transformation --namespace=mts-vsi-dal05
+      port=$(kubectl get services --namespace=mts-vsi-dal05 | grep metrics-transformation-service | sed 's/.*:\([0-9]*\).*/\1/g')
+      echo ""
+      echo "VIEW THE APPLICATION AT: http://$ip_addr:$port"
+hooks:
+- enabled: true
+  label: null
+  ssl_enabled: false
+  url: https://devops-api.ng.bluemix.net/v1/messaging/webhook/publish
